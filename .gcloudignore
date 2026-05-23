@@ -5,6 +5,3 @@ node_modules
 npm-debug.log
 README.md
 summary.md
-deploy-gcp.ps1
-cloudbuild.yaml
-.dockerignore

@@ -378,11 +378,26 @@ export const AegisStore = {
 
     const signal = deriveVolunteerSignal(text);
 
-    if (signal.kind === "gate_density") {
-      this.setGateFlow(signal.gateId, signal.flowRate);
+    if (signal.kind === "gate_density" || signal.kind === "threat_detected") {
+      if (signal.kind === "gate_density") {
+        this.setGateFlow(signal.gateId, signal.flowRate);
+      } else if (signal.kind === "threat_detected") {
+        this.updateState((s) => {
+          s.activeIncident = "threat";
+          s.thoughts.push({
+            id: Math.random().toString(),
+            agent: "Security",
+            type: "thought",
+            message: `CRITICAL ALERT: Threat detected at ${signal.location}. ${signal.summary}`,
+            timestamp: getTimestamp()
+          });
+        });
+      }
+
       const volunteerName = text.match(/Volunteer:\s*([^|]+)/i)?.[1]?.trim() || "Volunteer";
-      const replyText = `Volunteer: ${volunteerName} | Location: Gate ${signal.gateId} | Problem: ${signal.summary} | Solution: ${signal.suggestion}`;
-      console.log(`[Telegram Gate Report] ${replyText}`);
+      const locationLabel = signal.kind === "gate_density" ? `Gate ${signal.gateId}` : signal.location;
+      const replyText = `Volunteer: ${volunteerName} | Location: ${locationLabel} | Problem: ${signal.summary} | Solution: ${signal.suggestion}`;
+      console.log(`[Telegram Report Sync] ${replyText}`);
       speakAlert(replyText);
 
       const tid = setTimeout(() => {

@@ -3,9 +3,9 @@ import {
   buildAuthRequiredMessage,
   buildTelegramMenu,
   getTelegramSession,
-  handleTelegramInboundText,
   updateTelegramSession,
 } from "@/lib/telegram/advanced";
+import { handleTelegramInboundText } from "@/lib/telegram/inbound";
 
 interface TelegramUpdateMessage {
   chat: {
@@ -142,7 +142,7 @@ export async function GET() {
         }
       }
 
-      const inbound = handleTelegramInboundText(session, text || message.text || "");
+      const inbound = await handleTelegramInboundText(session, text || message.text || "");
       if (inbound.sessionPatch) {
         updateTelegramSession(message.chat.id, inbound.sessionPatch);
       }

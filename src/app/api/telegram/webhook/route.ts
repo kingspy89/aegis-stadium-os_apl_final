@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { handleTelegramInboundText, getTelegramSession, updateTelegramSession, buildAuthRequiredMessage, buildTelegramMenu } from "@/lib/telegram/advanced";
+import { getTelegramSession, updateTelegramSession, buildAuthRequiredMessage, buildTelegramMenu } from "@/lib/telegram/advanced";
+import { handleTelegramInboundText } from "@/lib/telegram/inbound";
 
 function getTelegramSendUrl(token: string) {
   return `https://api.telegram.org/bot${token}/sendMessage`;
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const inbound = handleTelegramInboundText(session, text || message.text || "");
+    const inbound = await handleTelegramInboundText(session, text || message.text || "");
     if (inbound.sessionPatch) {
       updateTelegramSession(chatId, inbound.sessionPatch);
     }
