@@ -149,6 +149,8 @@ export async function GET() {
 
       const updatedSession = getTelegramSession(message.chat);
 
+      console.log(`[Telegram Receive] Session state for chat ${message.chat.id}: auth=${updatedSession.authenticated ? "yes" : "no"}, stage=${updatedSession.authStage}, user=${updatedSession.volunteerName || updatedSession.firstName}, zone=${updatedSession.zone || "unassigned"}`);
+
       if (!updatedSession.authenticated) {
         await sendTelegramReply(token, message.chat.id, inbound.replyText, inbound.replyMarkup);
         continue;
@@ -157,6 +159,10 @@ export async function GET() {
       if (!inbound.shouldQueue) {
         await sendTelegramReply(token, message.chat.id, inbound.replyText, inbound.replyMarkup);
         continue;
+      }
+
+      if (inbound.simulationSignal?.kind === "gate_density") {
+        console.log(`[Telegram Receive] Structured gate report queued: ${inbound.queueText}`);
       }
 
       messages.push({

@@ -34,3 +34,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Docker Deploy
+
+This project now includes a production Docker setup for Google Cloud Run or any Docker host.
+
+### Build locally
+
+```bash
+docker build -t aegis-stadium-os .
+docker run --rm -p 3000:3000 --env-file .env aegis-stadium-os
+```
+
+### Cloud Run example
+
+```bash
+gcloud run deploy aegis-stadium-os \
+	--project spry-notch-497208-k3 \
+	--image us-central1-docker.pkg.dev/spry-notch-497208-k3/aegis-stadium-os/aegis-stadium-os:latest \
+	--platform managed \
+	--allow-unauthenticated \
+	--set-env-vars TELEGRAM_BOT_TOKEN=your_token,GEMINI_API_KEY=your_key
+```
+
+The container listens on the Cloud Run `PORT` automatically.

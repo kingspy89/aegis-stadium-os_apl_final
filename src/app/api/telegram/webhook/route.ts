@@ -121,6 +121,8 @@ export async function POST(req: Request) {
 
     const updatedSession = getTelegramSession(message.chat);
 
+    console.log(`[Telegram Webhook] Session state for chat ${chatId}: auth=${updatedSession.authenticated ? "yes" : "no"}, stage=${updatedSession.authStage}, user=${updatedSession.volunteerName || updatedSession.firstName}, zone=${updatedSession.zone || "unassigned"}`);
+
     if (!updatedSession.authenticated) {
       await sendTelegramReply(token, chatId, inbound.replyText, inbound.replyMarkup);
       return NextResponse.json({ success: true, authFlow: true });
@@ -129,6 +131,10 @@ export async function POST(req: Request) {
     if (!inbound.shouldQueue) {
       await sendTelegramReply(token, chatId, inbound.replyText, inbound.replyMarkup);
       return NextResponse.json({ success: true, sent: true });
+    }
+
+    if (inbound.simulationSignal?.kind === "gate_density") {
+      console.log(`[Telegram Webhook] Structured gate report queued: ${inbound.queueText}`);
     }
 
     globalThis.telegramQueue = globalThis.telegramQueue || [];

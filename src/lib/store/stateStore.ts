@@ -378,46 +378,14 @@ export const AegisStore = {
 
     const signal = deriveVolunteerSignal(text);
 
-    if (signal.kind === "security_threat") {
-      const replyText = signal.severity === "critical"
-        ? "Critical security alert logged. Security and Emergency agents are moving now."
-        : "Security concern logged. Security agent is reviewing the report.";
-
-      const tid = setTimeout(() => {
-        this.updateState((s) => {
-          s.volunteerChat.push({
-            id: Math.random().toString(),
-            sender: "AI_Agent",
-            text: replyText,
-            timestamp: getTimestamp()
-          });
-        });
-
-        if (typeof window !== "undefined") {
-          const telegramWindow = window as Window & { lastTelegramChatId?: number };
-          if (telegramWindow.lastTelegramChatId) {
-            fetch("/api/telegram/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chatId: telegramWindow.lastTelegramChatId,
-                text: replyText
-              })
-            }).catch(err => console.error("Failed to sync AI response to Telegram:", err));
-          }
-        }
-      }, 1200);
-      timers.push(tid);
-      if (!globalState.isSimulating) {
-        this.triggerAct2();
-      }
-      return;
-    }
-
     if (signal.kind === "gate_density") {
       this.setGateFlow(signal.gateId, signal.flowRate);
+      const volunteerName = text.match(/Volunteer:\s*([^|]+)/i)?.[1]?.trim() || "Volunteer";
+      const replyText = `Volunteer: ${volunteerName} | Location: Gate ${signal.gateId} | Problem: ${signal.summary} | Solution: ${signal.suggestion}`;
+      console.log(`[Telegram Gate Report] ${replyText}`);
+      speakAlert(replyText);
+
       const tid = setTimeout(() => {
-        const replyText = `Gate ${signal.gateId} congestion logged. Crowd and routing agents are recalculating flows now.`;
         this.updateState((s) => {
           s.volunteerChat.push({
             id: Math.random().toString(),
@@ -444,27 +412,21 @@ export const AegisStore = {
       timers.push(tid);
       return;
     }
-    
-    // Automatically trigger AI handler logic
-    if (globalState.activeIncident === null && text.toLowerCase().includes("bag")) {
-      this.triggerAct2();
-    } else {
-      // Standard reply
-      const tid = setTimeout(() => {
-        const replyText = "Report received. Aegis central agents are actively reviewing sensor nodes and security telemetry in this sector.";
-        this.updateState((s) => {
-          s.volunteerChat.push({
-            id: Math.random().toString(),
-            sender: "AI_Agent",
-            text: replyText,
-            timestamp: getTimestamp()
-          });
-        });
 
-        // Also push back to Telegram if we have a tracked chatId
-        if (typeof window !== "undefined") {
-          const telegramWindow = window as Window & { lastTelegramChatId?: number };
-          if (telegramWindow.lastTelegramChatId) {
+    const replyText = "Gate flow update logged. Send an explicit Gate 1-4 status like 'Gate 1 is full' to update the simulation.";
+    const tid = setTimeout(() => {
+      this.updateState((s) => {
+        s.volunteerChat.push({
+          id: Math.random().toString(),
+          sender: "AI_Agent",
+          text: replyText,
+          timestamp: getTimestamp()
+        });
+      });
+
+      if (typeof window !== "undefined") {
+        const telegramWindow = window as Window & { lastTelegramChatId?: number };
+        if (telegramWindow.lastTelegramChatId) {
           fetch("/api/telegram/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -473,12 +435,10 @@ export const AegisStore = {
               text: replyText
             })
           }).catch(err => console.error("Failed to sync AI response to Telegram:", err));
-          }
         }
-
-      }, 1500);
-      timers.push(tid);
-    }
+      }
+    }, 1500);
+    timers.push(tid);
   },
 
   // ----------------------------------------------------
@@ -507,41 +467,6 @@ export const AegisStore = {
             id: Math.random().toString(),
             agent: "Orchestrator",
             type: "thought",
-            message: "CRITICAL density telemetry spike at Turnstiles Gate 2 (Metro Plaza). Volume: 18,400/20,000 capacity. Flow: 185 p/m. Dispatched Crowd Intelligence Agent.",
-            timestamp: getTimestamp()
-          });
-        });
-        speakAlert("Warning: Crowd surge detected at entry Gate 2 near Metro Plaza. Dispatched Crowd Intelligence Agent.");
-      },
-      // Step 2: Crowd Agent analysis
-      () => {
-        this.updateState((s) => {
-          s.activeAgentNetwork.Orchestrator = false;
-          s.activeAgentNetwork.Crowd = true;
-          s.thoughts.push({
-            id: Math.random().toString(),
-            agent: "Crowd",
-            type: "tool",
-            message: "Running tool: get_density_map('Gate 2 metro plaza'). Inflow: 185 p/m. BottleNeck Probability: 94% within 10 minutes.",
-            timestamp: getTimestamp()
-          });
-        });
-      },
-      // Step 3: Debate / Negotiation begins
-      () => {
-        this.updateState((s) => {
-          s.activeAgentNetwork.Crowd = false;
-          s.activeAgentNetwork.Routing = true;
-          s.thoughts.push({
-            id: Math.random().toString(),
-            agent: "Routing",
-            type: "thought",
-            message: "Calculated optimal evacuation/bypass capacity. Diverting inflow: 65% to Gate 1 (Main Road), 35% to Gate 3.",
-            timestamp: getTimestamp()
-          });
-          s.debate.push({
-            id: Math.random().toString(),
-            agent: "Crowd",
             message: "Bottleneck threshold exceeded at Reliance End. Gate 2 is unsafe for additional massive inflow.",
             timestamp: getTimestamp()
           });

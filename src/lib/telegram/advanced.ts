@@ -40,12 +40,6 @@ export type VolunteerSignal =
       suggestion: string;
     }
   | {
-      kind: "security_threat";
-      severity: "warning" | "critical";
-      summary: string;
-      suggestion: string;
-    }
-  | {
       kind: "routine";
       summary: string;
       suggestion: string;
@@ -124,8 +118,32 @@ export function buildTelegramMenu(session: TelegramSession): TelegramReplyMarkup
         { text: "Shift Handover", callback_data: "menu:handover" },
         { text: "Help", callback_data: "menu:help" },
       ],
+      [
+        { text: "Logout", callback_data: "menu:logout" },
+      ],
     ],
   };
+}
+
+export function resetTelegramSession(session: TelegramSession) {
+  const resetSession: TelegramSession = {
+    ...session,
+    volunteerId: null,
+    volunteerName: null,
+    role: defaultRole,
+    zone: null,
+    onboarded: false,
+    authenticated: false,
+    authStage: "idle",
+    pendingVolunteerId: null,
+    failedAuthAttempts: 0,
+    lastCommand: "/logout",
+    lastSeen: getTimestamp(),
+  };
+
+  globalThis.telegramSessions = globalThis.telegramSessions || new Map<number, TelegramSession>();
+  globalThis.telegramSessions.set(session.chatId, resetSession);
+  return resetSession;
 }
 
 export function buildWelcomeMessage(session: TelegramSession) {
@@ -164,7 +182,8 @@ export function buildAuthSuccessMessage(session: TelegramSession) {
     text: [
       `Authorization successful for ${session.volunteerName || session.firstName}.`,
       `Role: ${session.role}. Zone: ${session.zone || "unassigned"}.`,
-      "You can now submit live reports. Try: 'Gate 1 is full' or 'Suspicious bag at South stand'.",
+      "You can now submit live gate reports. Try: 'Gate 1 is full' or 'Gate 2 congestion rising'.",
+      "Send /logout any time to sign out.",
     ].join("\n"),
     replyMarkup: buildTelegramMenu(session),
   };
@@ -193,12 +212,12 @@ export function buildHelpMessage(session: TelegramSession) {
     text: [
       "Telegram command set:",
       "/start - register or refresh your volunteer session",
-      "/report <details> - submit a field update for triage",
+      "/report <details> - submit a gate flow update",
       "/status - show your current session state",
       "/zone <A|B|C|D> - assign your active sector",
       "/handover <notes> - send a shift handover summary",
-      "/emergency <details> - escalate a critical situation",
       `Current zone: ${session.zone || "unassigned"}`,
+      "Gate reports are limited to Gate 1, Gate 2, Gate 3, and Gate 4.",
     ].join("\n"),
     replyMarkup: buildTelegramMenu(session),
   };
@@ -212,6 +231,16 @@ export function buildStatusMessage(session: TelegramSession) {
       `Zone: ${session.zone || "unassigned"}.`,
       `Last command: ${session.lastCommand || "none"}.`,
       `Last seen: ${session.lastSeen}.`,
+    ].join("\n"),
+    replyMarkup: buildTelegramMenu(session),
+  };
+}
+
+export function buildLogoutMessage(session: TelegramSession) {
+  return {
+    text: [
+      `You have been signed out, ${session.volunteerName || session.firstName}.`,
+      "Send /start to authenticate again.",
     ].join("\n"),
     replyMarkup: buildTelegramMenu(session),
   };
@@ -277,12 +306,12 @@ export function buildReportMessage(session: TelegramSession, text: string) {
 
 export function deriveVolunteerSignal(text: string): VolunteerSignal {
   const lower = text.toLowerCase();
-  const gateMatch = lower.match(/gate\s*([1-4])/i);
+  const gateMatch = lower.match(/gate\s*([1-4a-d])/i);
   const crowdIndicators = /(full|crowded|congested|congestion|packed|jammed|queue|line|overflow|bottleneck|rush)/i.test(lower);
-  const threatIndicators = /(bag|backpack|weapon|fire|smoke|panic|fight|injury|explosion|attack|bomb|suspicious)/i.test(lower);
 
   if (gateMatch && crowdIndicators) {
-    const gateId = gateMatch[1];
+    const rawGate = gateMatch[1].toUpperCase();
+    const gateId = rawGate === "A" ? "1" : rawGate === "B" ? "2" : rawGate === "C" ? "3" : rawGate === "D" ? "4" : rawGate;
     const severe = /(full|packed|jammed|overflow|bottleneck|rush)/i.test(lower);
 
     return {
@@ -299,24 +328,10 @@ export function deriveVolunteerSignal(text: string): VolunteerSignal {
     };
   }
 
-  if (threatIndicators) {
-    const severe = /(weapon|fire|smoke|panic|explosion|attack|bomb)/i.test(lower);
-    return {
-      kind: "security_threat",
-      severity: severe ? "critical" : "warning",
-      summary: severe
-        ? "Security threat language detected. Escalate immediately to security and emergency agents."
-        : "Potential security concern detected. Security agent should review the report.",
-      suggestion: severe
-        ? "Activate emergency response, isolate the area, and notify the security team."
-        : "Ask the security agent to inspect the sector and confirm whether intervention is needed.",
-    };
-  }
-
   return {
     kind: "routine",
-    summary: "Routine volunteer update logged.",
-    suggestion: "Agents will review the report and continue monitoring the sector.",
+    summary: "Update logged. No gate pressure change detected.",
+    suggestion: "Use explicit gate flow language like 'Gate 3 is full' to update the simulation.",
   };
 }
 
@@ -325,6 +340,7 @@ export function handleTelegramInboundText(session: TelegramSession, incomingText
   const command = text.toLowerCase().split(/\s+/)[0];
 
   if (command === "/start") {
+    console.log(`[Telegram Auth] Chat ${session.chatId}: starting volunteer auth for ${session.username}.`);
     return {
       sessionPatch: {
         onboarded: false,
@@ -360,6 +376,7 @@ export function handleTelegramInboundText(session: TelegramSession, incomingText
       const record = findVolunteerRecord(volunteerId, text);
 
       if (!record) {
+        console.log(`[Telegram Auth] Chat ${session.chatId}: failed login for volunteer ID ${volunteerId}.`);
         return {
           sessionPatch: {
             authStage: "awaiting_id",
@@ -384,6 +401,8 @@ export function handleTelegramInboundText(session: TelegramSession, incomingText
         pendingVolunteerId: null,
         lastCommand: "/start",
       };
+
+      console.log(`[Telegram Auth] Chat ${session.chatId}: authenticated ${record.displayName} (${record.volunteerId}) in zone ${record.zone || "unassigned"}.`);
 
       return {
         sessionPatch: updatedSession,
@@ -444,13 +463,50 @@ export function handleTelegramInboundText(session: TelegramSession, incomingText
     };
   }
 
+  if (command === "/logout" || command === "/signout") {
+    const resetSession = resetTelegramSession(session);
+    console.log(`[Telegram Auth] Chat ${session.chatId}: ${session.volunteerName || session.firstName} logged out.`);
+    return {
+      sessionPatch: resetSession,
+      replyText: buildLogoutMessage(resetSession).text,
+      replyMarkup: buildTelegramMenu(resetSession),
+      shouldQueue: false,
+    };
+  }
+
+  if (!text.toLowerCase().includes("gate")) {
+    return {
+      sessionPatch: { lastCommand: "report" },
+      replyText: "Gate flow reports only. Please send a Gate 1-4 update such as 'Gate 2 is full'.",
+      replyMarkup: buildTelegramMenu(session),
+      shouldQueue: false,
+    };
+  }
+
+  const signal = deriveVolunteerSignal(text);
+  const gateLabel = signal.kind === "gate_density" ? `Gate ${signal.gateId}` : "Gate unknown";
   const report = buildReportMessage(session, text);
+  const structuredText = signal.kind === "gate_density"
+    ? [
+        `Volunteer: ${session.volunteerName || session.firstName}`,
+        `Location: ${gateLabel}`,
+        `Problem: ${signal.summary}`,
+        `Solution: ${signal.suggestion}`,
+      ].join(" | ")
+    : report.text;
+
+  if (signal.kind === "gate_density") {
+    console.log(`[Telegram Gate Report] ${session.volunteerName || session.firstName} | ${gateLabel} | ${signal.summary} | ${signal.suggestion}`);
+  } else {
+    console.log(`[Telegram Report] ${session.volunteerName || session.firstName} | ${text}`);
+  }
+
   return {
     sessionPatch: { lastCommand: "report" },
-    replyText: report.text,
+    replyText: structuredText,
     replyMarkup: report.replyMarkup,
     shouldQueue: true,
-    queueText: text,
-    simulationSignal: deriveVolunteerSignal(text),
+    queueText: structuredText,
+    simulationSignal: signal,
   };
 }
