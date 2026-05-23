@@ -81,16 +81,6 @@ flowchart TD
 
 External input flow:
 
-```mermaid
-flowchart LR
-    A[Fan Companion] --> C[/api/sync]
-    B[Telegram Volunteer Bot] --> D[/api/telegram/webhook]
-    D --> E[Auth, Media Analysis, Report Classification]
-    E --> C
-    C --> F[Dashboard Polling]
-    F --> G[Gate Flow, Stand Occupancy, Agent Logs]
-```
-
 ## Demo Walkthrough
 
 Use this path for a clean presentation:
