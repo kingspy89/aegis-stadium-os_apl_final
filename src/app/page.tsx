@@ -7,9 +7,7 @@ import AgentConsole from "@/components/AgentConsole";
 import AgentNetwork from "@/components/AgentNetwork";
 import DemoController from "@/components/DemoController";
 import TelegramSync from "@/components/TelegramSync";
-import VolunteerBotSim from "@/components/VolunteerBotSim";
-import FanAppWidget from "@/components/FanAppWidget";
-import { ShieldCheck, Download, Users, Radio, ExternalLink } from "lucide-react";
+import { ShieldCheck, Download, Users, Radio } from "lucide-react";
 
 export default function Home() {
   const [state, setState] = useState<AegisState | null>(null);
